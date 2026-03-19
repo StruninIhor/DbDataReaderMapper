@@ -497,5 +497,54 @@ namespace Tests
                 });
             }
         }
+
+        [TestMethod]
+        public async Task TestMapperNestedObjectCustomColumnNames()
+        {
+            OleDbCommand cmd = connection.CreateCommand();
+            connection.Open();
+            cmd.CommandText = "SELECT Employee.ID, Employee.FullName, " +
+                "Department.ID AS DepartmentId, Department.[Name] AS Dept_DepartmentName " +
+                "FROM Employee " +
+                "INNER JOIN Department ON Employee.DepartmentID = Department.ID " +
+                "WHERE Employee.ID = 1;";
+            cmd.Connection = connection;
+
+            var reader = await cmd.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                var employeeObj = reader.MapToObject<EmployeeWithDepartmentCustomColumns>();
+                Assert.IsNotNull(employeeObj);
+                Assert.AreEqual(1, employeeObj.Id);
+                Assert.IsNotNull(employeeObj.FullName);
+                Assert.IsNotNull(employeeObj.Department);
+                Assert.IsNotNull(employeeObj.Department.Id);
+                Assert.IsNotNull(employeeObj.Department.Name);
+            }
+            connection.Close();
+        }
+
+        [TestMethod]
+        public async Task TestMapperNestedObjectCustomColumnNamesLeftJoinNull()
+        {
+            OleDbCommand cmd = connection.CreateCommand();
+            connection.Open();
+            cmd.CommandText = "SELECT Employee.ID, Employee.FullName, " +
+                "Department.ID AS DepartmentId, Department.[Name] AS Dept_DepartmentName " +
+                "FROM Employee " +
+                "LEFT JOIN Department ON Employee.DepartmentID = Department.ID " +
+                "WHERE Employee.ID = 2;";
+            cmd.Connection = connection;
+
+            var reader = await cmd.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                var employeeObj = reader.MapToObject<EmployeeWithDepartmentCustomColumns>();
+                Assert.IsNotNull(employeeObj);
+                Assert.AreEqual(2, employeeObj.Id);
+                Assert.IsNull(employeeObj.Department);
+            }
+            connection.Close();
+        }
     }
 }

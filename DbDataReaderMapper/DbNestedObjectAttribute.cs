@@ -13,6 +13,17 @@ namespace DbDataReaderMapper
     /// object's Id and Name properties respectively.
     /// If all prefixed columns are NULL (e.g. from a LEFT JOIN with no match),
     /// the nested property is set to null rather than an empty instance.
+    /// 
+    /// Properties on the nested type can use <see cref="DbColumnAttribute"/> to
+    /// map from a custom column name. By default, the attribute value is treated as
+    /// a prefix-relative name (the prefix is prepended). For example, with prefix
+    /// "Dept_", <c>[DbColumn("DepartmentId")]</c> matches column "Dept_DepartmentId".
+    /// 
+    /// Set <see cref="DbColumnAttribute.Override"/> to <c>true</c> to treat the
+    /// attribute value as the full column name, ignoring the prefix entirely.
+    /// For example, <c>[DbColumn("DepartmentId", Override = true)]</c> matches
+    /// column "DepartmentId" directly. Override mappings take priority over
+    /// prefix-based matching.
     /// </remarks>
     [AttributeUsage(AttributeTargets.Property)]
     public class DbNestedObjectAttribute : Attribute

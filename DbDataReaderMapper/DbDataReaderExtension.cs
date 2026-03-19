@@ -249,7 +249,10 @@ namespace DbDataReaderMapper
             public PropertyInfo ParentProperty { get; set; }
             public string ColumnPrefix { get; set; }
             public PropertyInfo[] TypeProperties { get; set; }
+            /// <summary>Prefix-relative name mappings (Override = false): stripped column name → property</summary>
             public Dictionary<string, PropertyInfo> CustomNameMappings { get; set; }
+            /// <summary>Full column name mappings (Override = true): exact column name → property</summary>
+            public Dictionary<string, PropertyInfo> OverrideNameMappings { get; set; }
         }
 
         private struct OrdinalEntry
@@ -272,16 +275,35 @@ namespace DbDataReaderMapper
                 {
                     var nestedType = prop.PropertyType;
                     var nestedProps = nestedType.GetProperties();
-                    var nestedCustomNames = nestedProps
-                        .Where(tp => GetColumnAttribute(tp) != null)
-                        .ToDictionary(tp => GetColumnAttribute(tp), tp => tp);
+                    var nestedCustomNames = new Dictionary<string, PropertyInfo>();
+                    var nestedOverrideNames = new Dictionary<string, PropertyInfo>();
+
+                    foreach (var tp in nestedProps)
+                    {
+                        var colAttr = tp.GetCustomAttributes(true)
+                            .OfType<DbColumnAttribute>()
+                            .FirstOrDefault();
+
+                        if (colAttr != null)
+                        {
+                            if (colAttr.Override)
+                            {
+                                nestedOverrideNames[colAttr.Name] = tp;
+                            }
+                            else
+                            {
+                                nestedCustomNames[colAttr.Name] = tp;
+                            }
+                        }
+                    }
 
                     result.Add(new NestedObjectContext
                     {
                         ParentProperty = prop,
                         ColumnPrefix = attr.ColumnPrefix,
                         TypeProperties = nestedProps,
-                        CustomNameMappings = nestedCustomNames
+                        CustomNameMappings = nestedCustomNames,
+                        OverrideNameMappings = nestedOverrideNames
                     });
                 }
             }
@@ -319,13 +341,20 @@ namespace DbDataReaderMapper
         {
             foreach (var nm in nestedMappings)
             {
+                if (nm.OverrideNameMappings.ContainsKey(columnName))
+                {
+                    mapping = nm;
+                    resolvedProperty = nm.OverrideNameMappings[columnName];
+                    return true;
+                }
+
                 if (columnName.StartsWith(nm.ColumnPrefix, StringComparison.Ordinal))
                 {
                     string strippedName = columnName.Substring(nm.ColumnPrefix.Length);
-                    var prop = nm.TypeProperties.FirstOrDefault(tp => tp.Name.Equals(strippedName));
                     var customProp = nm.CustomNameMappings.ContainsKey(strippedName)
                         ? nm.CustomNameMappings[strippedName]
                         : null;
+                    var prop = nm.TypeProperties.FirstOrDefault(tp => tp.Name.Equals(strippedName));
 
                     resolvedProperty = customProp ?? prop;
                     if (resolvedProperty != null)
