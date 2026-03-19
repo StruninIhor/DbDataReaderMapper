@@ -243,6 +243,38 @@ namespace Tests
         }
 
         [TestMethod]
+        public async Task TestMapperListMultipleRows()
+        {
+            OleDbCommand cmd = connection.CreateCommand();
+            connection.Open();
+            cmd.CommandText = "SELECT ID AS Id FROM Employee;";
+            cmd.Connection = connection;
+
+            int rowCounter = 0;
+            var reader = await cmd.ExecuteReaderAsync();
+            var employeeList = await reader.MapToListAsync<EmployeeMissingFields>();
+            await reader.CloseAsync();
+            OleDbCommand cmd1 = connection.CreateCommand();
+            cmd.CommandText = "SELECT ID AS Id FROM Employee;";
+            cmd.Connection = connection;
+
+          
+            var reader1 = await cmd.ExecuteReaderAsync();
+
+            while (await reader1.ReadAsync())
+            {
+                var employeeObj = employeeList[rowCounter];
+                Assert.AreEqual(employeeObj, new EmployeeMissingFields
+                {
+                    Id = reader1.GetInt32(0)
+                });
+                ++rowCounter;
+            }
+            Assert.AreEqual(2, rowCounter);
+            connection.Close();
+        }
+
+        [TestMethod]
         public async Task TestMapperCustomConverter()
         {
             OleDbCommand cmd = connection.CreateCommand();

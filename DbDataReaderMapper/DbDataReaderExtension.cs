@@ -2,6 +2,7 @@ using System.Linq;
 using System.Data.Common;
 using System.Reflection;
 using System;
+using System.Threading.Tasks;
 using DbDataReaderMapper.Exceptions;
 using System.Collections.Generic;
 
@@ -69,6 +70,78 @@ namespace DbDataReaderMapper
             }
 
             return obj;
+        }
+
+        /// <summary>
+        /// Reads all rows asynchronously and maps each to the specified type.
+        /// Column-to-property ordinals are resolved once before iteration.
+        /// </summary>
+        /// <typeparam name="T">The type of the output objects</typeparam>
+        /// <param name="dataReader">The data source</param>
+        /// <param name="customPropertyConverter">Use a custom converter for certain values</param>
+        /// <returns>A list of objects mapped from every row in the reader</returns>
+        public static async Task<IList<T>> MapToListAsync<T>(this DbDataReader dataReader, CustomPropertyConverter customPropertyConverter = null) where T : class
+        {
+            PropertyInfo[] typeProperties = typeof(T).GetProperties();
+            var customNameMappings = typeProperties
+                .Where(tp => GetColumnAttribute(tp) != null)
+                .ToDictionary(tp => GetColumnAttribute(tp), tp => tp);
+
+            var ordinalMap = new PropertyInfo[dataReader.FieldCount];
+            for (int i = 0; i < dataReader.FieldCount; i++)
+            {
+                string columnName = dataReader.GetName(i);
+
+                var mappedProperty = typeProperties.Where(tp => tp.Name.Equals(columnName)).FirstOrDefault();
+                var mappedPropertyCustomName = customNameMappings.ContainsKey(columnName) ? customNameMappings[columnName] : null;
+
+                if (IsAttributePropertyNamingClash(customNameMappings, columnName, mappedProperty, mappedPropertyCustomName))
+                {
+                    throw new DbColumnMappingException($"Attribute {columnName} has the same name as a property defined in the model");
+                }
+
+                ordinalMap[i] = mappedPropertyCustomName ?? mappedProperty;
+            }
+
+            var result = new List<T>();
+
+            while (await dataReader.ReadAsync().ConfigureAwait(false))
+            {
+                T obj = Activator.CreateInstance<T>();
+
+                for (int i = 0; i < ordinalMap.Length; i++)
+                {
+                    var resolvedMappedProperty = ordinalMap[i];
+                    if (resolvedMappedProperty == null)
+                        continue;
+
+                    var value = dataReader.GetValue(i);
+                    if (value is DBNull)
+                    {
+                        value = null;
+                    }
+
+                    try
+                    {
+                        if (customPropertyConverter != null && customPropertyConverter[resolvedMappedProperty] != null)
+                        {
+                            resolvedMappedProperty.SetValue(obj, customPropertyConverter[resolvedMappedProperty].DynamicInvoke(value));
+                        }
+                        else
+                        {
+                            resolvedMappedProperty.SetValue(obj, value);
+                        }
+                    }
+                    catch
+                    {
+                        throw new InvalidCastException($"Expected type {resolvedMappedProperty.PropertyType} but found {value.GetType()} for property {dataReader.GetName(i)}");
+                    }
+                }
+
+                result.Add(obj);
+            }
+
+            return result;
         }
 
         /// <summary>
