@@ -325,6 +325,154 @@ namespace Tests
         }
 
         [TestMethod]
+        public async Task TestMapperNestedObjectInnerJoin()
+        {
+            OleDbCommand cmd = connection.CreateCommand();
+            connection.Open();
+            cmd.CommandText = "SELECT Employee.ID, Employee.FullName, Employee.Age, Employee.Address, Employee.DoB, " +
+                "UCASE(Employee.FullName) AS FullNameUpper, " +
+                "Department.ID AS Dept_Id, Department.[Name] AS Dept_Name " +
+                "FROM Employee " +
+                "INNER JOIN Department ON Employee.DepartmentID = Department.ID " +
+                "WHERE Employee.ID = 1;";
+            cmd.Connection = connection;
+
+            var converter = new CustomPropertyConverter()
+                .AddConversion<EmployeeWithDepartment, string, string>(
+                    e => e.FullNameUpperCase, name => name?.ToUpper());
+
+            var reader = await cmd.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                var employeeObj = reader.MapToObject<EmployeeWithDepartment>(converter);
+                Assert.IsNotNull(employeeObj);
+                Assert.IsNotNull(employeeObj.Department);
+                Assert.AreEqual(1, employeeObj.Id);
+                Assert.AreEqual(employeeObj.FullName?.ToUpper(), employeeObj.FullNameUpperCase);
+                Assert.IsNotNull(employeeObj.Department.Id);
+                Assert.IsNotNull(employeeObj.Department.Name);
+            }
+            connection.Close();
+        }
+
+        [TestMethod]
+        public async Task TestMapperNestedObjectLeftJoinNull()
+        {
+            OleDbCommand cmd = connection.CreateCommand();
+            connection.Open();
+            cmd.CommandText = "SELECT Employee.ID, Employee.FullName, Employee.Age, Employee.Address, Employee.DoB, " +
+                "UCASE(Employee.FullName) AS FullNameUpper, " +
+                "Department.ID AS Dept_Id, Department.[Name] AS Dept_Name " +
+                "FROM Employee " +
+                "LEFT JOIN Department ON Employee.DepartmentID = Department.ID " +
+                "WHERE Employee.ID = 2;";
+            cmd.Connection = connection;
+
+            var converter = new CustomPropertyConverter()
+                .AddConversion<EmployeeWithDepartment, string, string>(
+                    e => e.FullNameUpperCase, name => name?.ToUpper());
+
+            var reader = await cmd.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                var employeeObj = reader.MapToObject<EmployeeWithDepartment>(converter);
+                Assert.IsNotNull(employeeObj);
+                Assert.AreEqual(2, employeeObj.Id);
+                Assert.IsNull(employeeObj.Department);
+            }
+            connection.Close();
+        }
+
+        [TestMethod]
+        public async Task TestMapperNestedObjectListInnerJoin()
+        {
+            OleDbCommand cmd = connection.CreateCommand();
+            connection.Open();
+            cmd.CommandText = "SELECT Employee.ID, Employee.FullName, Employee.Age, Employee.Address, Employee.DoB, " +
+                "UCASE(Employee.FullName) AS FullNameUpper, " +
+                "Department.ID AS Dept_Id, Department.[Name] AS Dept_Name " +
+                "FROM Employee " +
+                "INNER JOIN Department ON Employee.DepartmentID = Department.ID;";
+            cmd.Connection = connection;
+
+            var converter = new CustomPropertyConverter()
+                .AddConversion<EmployeeWithDepartment, string, string>(
+                    e => e.FullNameUpperCase, name => name?.ToUpper());
+
+            var reader = await cmd.ExecuteReaderAsync();
+            var employees = await reader.MapToListAsync<EmployeeWithDepartment>(converter);
+
+            Assert.IsTrue(employees.Count > 0);
+            foreach (var emp in employees)
+            {
+                Assert.IsNotNull(emp.Department);
+                Assert.IsNotNull(emp.Department.Id);
+                Assert.IsNotNull(emp.Department.Name);
+                Assert.AreEqual(emp.FullName?.ToUpper(), emp.FullNameUpperCase);
+            }
+            connection.Close();
+        }
+
+        [TestMethod]
+        public async Task TestMapperNestedObjectListLeftJoin()
+        {
+            OleDbCommand cmd = connection.CreateCommand();
+            connection.Open();
+            cmd.CommandText = "SELECT Employee.ID, Employee.FullName, Employee.Age, Employee.Address, Employee.DoB, " +
+                "UCASE(Employee.FullName) AS FullNameUpper, " +
+                "Department.ID AS Dept_Id, Department.[Name] AS Dept_Name " +
+                "FROM Employee " +
+                "LEFT JOIN Department ON Employee.DepartmentID = Department.ID;";
+            cmd.Connection = connection;
+
+            var converter = new CustomPropertyConverter()
+                .AddConversion<EmployeeWithDepartment, string, string>(
+                    e => e.FullNameUpperCase, name => name?.ToUpper());
+
+            var reader = await cmd.ExecuteReaderAsync();
+            var employees = await reader.MapToListAsync<EmployeeWithDepartment>(converter);
+
+            Assert.IsTrue(employees.Count >= 2);
+
+            var withDept = employees.FirstOrDefault(e => e.Id == 1);
+            var withoutDept = employees.FirstOrDefault(e => e.Id == 2);
+
+            Assert.IsNotNull(withDept);
+            Assert.IsNotNull(withDept.Department);
+            Assert.IsNotNull(withDept.Department.Id);
+            Assert.IsNotNull(withDept.Department.Name);
+
+            Assert.IsNotNull(withoutDept);
+            Assert.IsNull(withoutDept.Department);
+        }
+
+        [TestMethod]
+        public async Task TestMapperNestedObjectWithoutConverter()
+        {
+            OleDbCommand cmd = connection.CreateCommand();
+            connection.Open();
+            cmd.CommandText = "SELECT Employee.ID, Employee.FullName, Employee.Age, Employee.Address, Employee.DoB, " +
+                "UCASE(Employee.FullName) AS FullNameUpper, " +
+                "Department.ID AS Dept_Id, Department.[Name] AS Dept_Name " +
+                "FROM Employee " +
+                "INNER JOIN Department ON Employee.DepartmentID = Department.ID " +
+                "WHERE Employee.ID = 1;";
+            cmd.Connection = connection;
+
+            var reader = await cmd.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                var employeeObj = reader.MapToObject<EmployeeWithDepartment>();
+                Assert.IsNotNull(employeeObj);
+                Assert.AreEqual(1, employeeObj.Id);
+                Assert.IsNotNull(employeeObj.Department);
+                Assert.IsNotNull(employeeObj.Department.Id);
+                Assert.IsNotNull(employeeObj.Department.Name);
+            }
+            connection.Close();
+        }
+
+        [TestMethod]
         public async Task TestMapperSubclassSetsSuperclassFieldsWithCustomPropertyConverter()
         {
             OleDbCommand cmd = connection.CreateCommand();
@@ -348,6 +496,55 @@ namespace Tests
                     DoB = reader.GetDateTime(4)
                 });
             }
+        }
+
+        [TestMethod]
+        public async Task TestMapperNestedObjectCustomColumnNames()
+        {
+            OleDbCommand cmd = connection.CreateCommand();
+            connection.Open();
+            cmd.CommandText = "SELECT Employee.ID, Employee.FullName, " +
+                "Department.ID AS DepartmentId, Department.[Name] AS Dept_DepartmentName " +
+                "FROM Employee " +
+                "INNER JOIN Department ON Employee.DepartmentID = Department.ID " +
+                "WHERE Employee.ID = 1;";
+            cmd.Connection = connection;
+
+            var reader = await cmd.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                var employeeObj = reader.MapToObject<EmployeeWithDepartmentCustomColumns>();
+                Assert.IsNotNull(employeeObj);
+                Assert.AreEqual(1, employeeObj.Id);
+                Assert.IsNotNull(employeeObj.FullName);
+                Assert.IsNotNull(employeeObj.Department);
+                Assert.IsNotNull(employeeObj.Department.Id);
+                Assert.IsNotNull(employeeObj.Department.Name);
+            }
+            connection.Close();
+        }
+
+        [TestMethod]
+        public async Task TestMapperNestedObjectCustomColumnNamesLeftJoinNull()
+        {
+            OleDbCommand cmd = connection.CreateCommand();
+            connection.Open();
+            cmd.CommandText = "SELECT Employee.ID, Employee.FullName, " +
+                "Department.ID AS DepartmentId, Department.[Name] AS Dept_DepartmentName " +
+                "FROM Employee " +
+                "LEFT JOIN Department ON Employee.DepartmentID = Department.ID " +
+                "WHERE Employee.ID = 2;";
+            cmd.Connection = connection;
+
+            var reader = await cmd.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                var employeeObj = reader.MapToObject<EmployeeWithDepartmentCustomColumns>();
+                Assert.IsNotNull(employeeObj);
+                Assert.AreEqual(2, employeeObj.Id);
+                Assert.IsNull(employeeObj.Department);
+            }
+            connection.Close();
         }
     }
 }
