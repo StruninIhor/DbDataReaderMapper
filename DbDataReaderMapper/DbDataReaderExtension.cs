@@ -1,4 +1,4 @@
-﻿using System.Linq;
+using System.Linq;
 using System.Data.Common;
 using System.Reflection;
 using System;
@@ -44,7 +44,7 @@ namespace DbDataReaderMapper
 
                 if (resolvedMappedProperty != null)
                 {
-                    var value = dataReader[columnName];
+                    var value = dataReader.GetValue(i);
                     if (value is DBNull)
                     {
                         value = null;
