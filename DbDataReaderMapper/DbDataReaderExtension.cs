@@ -5,6 +5,7 @@ using System;
 using System.Threading.Tasks;
 using DbDataReaderMapper.Exceptions;
 using System.Collections.Generic;
+using System.Threading;
 
 namespace DbDataReaderMapper
 {
@@ -114,7 +115,7 @@ namespace DbDataReaderMapper
         /// <param name="dataReader">The data source</param>
         /// <param name="customPropertyConverter">Use a custom converter for certain values</param>
         /// <returns>A list of objects mapped from every row in the reader</returns>
-        public static async Task<IList<T>> MapToListAsync<T>(this DbDataReader dataReader, CustomPropertyConverter customPropertyConverter = null) where T : class
+        public static async Task<IList<T>> MapToListAsync<T>(this DbDataReader dataReader, CustomPropertyConverter customPropertyConverter = null, CancellationToken cancellationToken = default) where T : class
         {
             PropertyInfo[] typeProperties = typeof(T).GetProperties();
             var customNameMappings = typeProperties
@@ -150,7 +151,7 @@ namespace DbDataReaderMapper
 
             var result = new List<T>();
 
-            while (await dataReader.ReadAsync().ConfigureAwait(false))
+            while (await dataReader.ReadAsync(cancellationToken).ConfigureAwait(false))
             {
                 T obj = Activator.CreateInstance<T>();
                 var nestedInstances = CreateNestedInstances(nestedMappings);
